@@ -3,28 +3,15 @@ import { LoggerService, LogLevel, Optional } from '@nestjs/common';
 import { clc, yellow } from '@nestjs/common/utils/cli-colors.util';
 import { isObject } from '@nestjs/common/utils/shared.utils';
 
-import * as httpContext from 'express-http-context';
-
 const colorize: boolean = process.env.ENV === 'local';
 const colorless = (t) => `${t}`;
 const _yellow = colorize ? yellow : colorless;
 
-/**
- * This is our custom logger, which we use to allow us to turn off color logs in Kubernetes,
- * and customize the output of the log messages.
- */
 export default class Logger implements LoggerService {
-  private static logLevels: LogLevel[] =
-    process.env.LOG_LEVEL === 'debug'
-      ? ['log', 'error', 'warn', 'debug']
-      : ['log', 'error', 'warn'];
-  private static lastTimestamp?: number;
+  private static logLevels: LogLevel[] = ['log', 'error', 'warn', 'debug'];
   private static instance?: typeof Logger | LoggerService = Logger;
 
-  constructor(
-    @Optional() protected context?: string,
-    @Optional() private readonly isTimestampEnabled = false,
-  ) {}
+  constructor(@Optional() protected context?: string) {}
 
   error(message: string, trace = '', context?: string): void {
     const instance = this.getInstance();
@@ -67,34 +54,25 @@ export default class Logger implements LoggerService {
     this.instance = isObject(logger) ? (logger as LoggerService) : undefined;
   }
 
-  static log(message: string, context = '', isTimeDiffEnabled = true): void {
-    this.printMessage(message, clc.green, context, isTimeDiffEnabled);
+  static log(message: string, context = ''): void {
+    this.printMessage(message, clc.green, context, 'INFO');
   }
 
-  static error(
-    message: string,
-    trace = '',
-    context = '',
-    isTimeDiffEnabled = true,
-  ): void {
-    this.printMessage(message, clc.red, context, isTimeDiffEnabled);
+  static error(message: string, trace = '', context = ''): void {
+    this.printMessage(message, clc.red, context, 'ERROR');
     this.printStackTrace(trace);
   }
 
-  static warn(message: string, context = '', isTimeDiffEnabled = true): void {
-    this.printMessage(message, clc.yellow, context, isTimeDiffEnabled);
+  static warn(message: string, context = ''): void {
+    this.printMessage(message, clc.yellow, context, 'WARN');
   }
 
-  static debug(message: string, context = '', isTimeDiffEnabled = true): void {
-    this.printMessage(message, clc.magentaBright, context, isTimeDiffEnabled);
+  static debug(message: string, context = ''): void {
+    this.printMessage(message, clc.magentaBright, context, 'DEBUG');
   }
 
-  static verbose(
-    message: string,
-    context = '',
-    isTimeDiffEnabled = true,
-  ): void {
-    this.printMessage(message, clc.cyanBright, context, isTimeDiffEnabled);
+  static verbose(message: string, context = ''): void {
+    this.printMessage(message, clc.cyanBright, context, 'VERBOSE');
   }
 
   private callFunction(
@@ -106,20 +84,9 @@ export default class Logger implements LoggerService {
       return;
     }
 
-    // Construct the request ID to include in the context
-    const reqId = httpContext.get('traceId')
-      ? ` - ${httpContext.get('traceId')}`
-      : '';
-
     const instance = this.getInstance();
     const func = instance && (instance as typeof Logger)[name];
-    func &&
-      func.call(
-        instance,
-        message,
-        (context || this.context) + reqId,
-        this.isTimestampEnabled,
-      );
+    func && func.call(instance, message, context || this.context, name);
   }
 
   private getInstance(): typeof Logger | LoggerService {
@@ -132,10 +99,10 @@ export default class Logger implements LoggerService {
   }
 
   private static printMessage(
-    message: string,
+    message: string | object,
     color: (message: string) => string,
     context = '',
-    isTimeDiffEnabled?: boolean,
+    name = '',
   ): void {
     const _color = colorize ? color : colorless;
     const output = isObject(message)
@@ -146,22 +113,8 @@ export default class Logger implements LoggerService {
     const timestamp = new Date(Date.now()).toISOString();
 
     const contextMessage = context ? _yellow(`[${context}] `) : '';
-    const timestampDiff = this.updateAndGetTimestampDiff(isTimeDiffEnabled);
 
-    process.stdout.write(
-      `${timestamp} ${contextMessage}${output}${timestampDiff}\n`,
-    );
-  }
-
-  private static updateAndGetTimestampDiff(
-    isTimeDiffEnabled?: boolean,
-  ): string {
-    const includeTimestamp = Logger.lastTimestamp && isTimeDiffEnabled;
-    const result = includeTimestamp
-      ? _yellow(` +${Date.now() - Logger.lastTimestamp}ms`)
-      : '';
-    Logger.lastTimestamp = Date.now();
-    return result;
+    process.stdout.write(`${timestamp} ${name} - ${contextMessage}${output}\n`);
   }
 
   private static printStackTrace(trace: string): void {

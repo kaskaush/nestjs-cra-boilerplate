@@ -1,10 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './modules/app.module';
-import NotFoundExceptionFilter from './filters/NotFoundExceptionFilter';
+import NotFoundExceptionFilter from './filters/not-found-exception.filter';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import Logger from './utils/Logger';
+import Logger from './utils/logger.util';
+
+const BACKEND_PORT = 3001;
 
 async function bootstrap() {
+  const logger = new Logger('main');
   const app = await NestFactory.create(AppModule, {
     logger: new Logger(),
   });
@@ -23,6 +26,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('swagger', app, document);
 
-  await app.listen(3000);
+  await app.listen(BACKEND_PORT, () =>
+    logger.log(`Started NestJS application on port ${BACKEND_PORT}`),
+  );
 }
 bootstrap();
